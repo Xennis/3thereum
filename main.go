@@ -11,9 +11,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 
-	"github.com/Xennis/3thereum/contracts/kyberrate"
-	"github.com/Xennis/3thereum/contracts/uniswapexchange"
-	"github.com/Xennis/3thereum/contracts/uniswapfactory"
+	"github.com/Xennis/3thereum/contract/kyberrate"
+	"github.com/Xennis/3thereum/contract/uniswapexchange"
+	"github.com/Xennis/3thereum/contract/uniswapfactory"
 )
 
 const (

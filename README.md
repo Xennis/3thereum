@@ -18,6 +18,6 @@ go run main.go
 Generate contract:
 
 ```shell
-cd contracts/<name>
+cd contract/<name>
 abigen --abi token.abi --pkg <name> --type Token --out token.go
 ```
