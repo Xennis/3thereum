@@ -12,3 +12,12 @@ Run the programm
 ```shell
 go run main.go
 ```
+
+### Notes
+
+Generate contract:
+
+```shell
+cd contracts/<name>
+abigen --abi token.abi --pkg <name> --type Token --out token.go
+```
