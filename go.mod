@@ -1,4 +1,4 @@
-module github.com/Xennis/3thereum/contractfinder
+module github.com/Xennis/3thereum
 
 go 1.17
 
