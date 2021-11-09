@@ -10,7 +10,10 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/params"
 
+	"github.com/Xennis/3thereum/contract/bancorcontractregistry"
+	"github.com/Xennis/3thereum/contract/bancornetwork"
 	"github.com/Xennis/3thereum/contract/kyberrate"
 	"github.com/Xennis/3thereum/contract/uniswapexchange"
 	"github.com/Xennis/3thereum/contract/uniswapfactory"
@@ -27,6 +30,14 @@ type pair struct {
 	outSymbol string
 	outAdress common.Address
 	amout     *big.Int
+}
+
+//func etherToWei(val *big.Int) *big.Int {
+//	return new(big.Int).Mul(val, big.NewInt(params.Ether))
+//}
+
+func weiToEther(val *big.Int) *big.Int {
+	return new(big.Int).Div(val, big.NewInt(params.Ether))
 }
 
 func uniswapRate(ctx context.Context, client *ethclient.Client, pair pair) (*big.Int, error) {
@@ -73,7 +84,55 @@ func kyberRate(ctx context.Context, client *ethclient.Client, pair pair) (*big.I
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get expected rate: %v", err)
 	}
-	return rate.ExpectedRate, rate.WorstRate, nil
+	expectedRate := weiToEther(rate.ExpectedRate)
+	worstRate := weiToEther(rate.WorstRate)
+	return expectedRate.Mul(expectedRate, pair.amout), worstRate.Mul(worstRate, pair.amout), nil
+}
+
+func bancorRate(ctx context.Context, client *ethclient.Client, pair pair) (*big.Int, error) {
+	const (
+		// https://docs.bancor.network/ethereum-contracts/addresses
+		bancorContractRegistry = "0x52Ae12ABe5D8BD778BD5397F99cA900624CfADD4"
+
+		// https://docs.bancor.network/ethereum-contracts/addresses
+		bancorNetworkContract = "BancorNetwork"
+	)
+
+	crToken, err := bancorcontractregistry.NewToken(common.HexToAddress(bancorContractRegistry), client)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create network token: %v", err)
+	}
+
+	var networkContractAddr [32]byte
+	copy(networkContractAddr[:], []byte(bancorNetworkContract))
+
+	adr, err := crToken.AddressOf(&bind.CallOpts{
+		Context: ctx,
+	}, networkContractAddr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create network token: %v", err)
+	}
+
+	networkToken, err := bancornetwork.NewToken(adr, client)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create network token: %v", err)
+	}
+
+	path, err := networkToken.ConversionPath(&bind.CallOpts{
+		Context: ctx,
+	}, pair.inAddress, pair.outAdress)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get conversation path: %v", err)
+	}
+
+	rate, err := networkToken.RateByPath(&bind.CallOpts{
+		Context: ctx,
+	}, path, pair.amout)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get rate by path: %v", err)
+	}
+
+	return rate, nil
 }
 
 func main() {
@@ -123,6 +182,11 @@ func main() {
 			log.Printf("%s -> %s failed to get kyber rate: %v", p.inSymbol, p.outSymbol, err)
 			continue
 		}
-		fmt.Printf("%s -> %s: uniswap=%s, kyber=%s/%s (expected/worst)\n", p.inSymbol, p.outSymbol, uniswap, kyberExpected, kyberWorst)
+		bancorRate, err := bancorRate(ctx, client, p)
+		if err != nil {
+			log.Printf("%s -> %s failed to get bancor rate: %v", p.inSymbol, p.outSymbol, err)
+			continue
+		}
+		fmt.Printf("%s -> %s: uniswap=%s, bancor=%s, kyber=%s/%s (expected/worst)\n", p.inSymbol, p.outSymbol, uniswap, bancorRate, kyberExpected, kyberWorst)
 	}
 }
